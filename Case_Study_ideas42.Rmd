@@ -1,0 +1,284 @@
+---
+title: "ideas42 Case"
+output: html_notebook
+---
+
+Loading in libraries:
+
+```{r}
+library(tidyverse) # for data cleaning 
+library(janitor) # for data cleaning
+library(Matching) # for KS Bootstrapped p-values
+library(BSDA) # for significance testing
+```
+
+Reading in the dataset.
+
+```{r}
+case_data <- read_excel("~/R Course/R/ideas42/Case_Data.xlsx", sheet = "Data")
+```
+
+Cleaning data.
+
+```{r}
+case_data_cleaned <- case_data %>% 
+  dplyr:::select(-PatientID) %>%
+        clean_names()
+
+```
+
+Before starting, I calculate all the necessary valuables I will be using throughout this notebook.
+
+```{r}
+# Filtering treatment group
+tr <- case_data_cleaned %>% 
+  filter(treatment == 1) 
+
+# Treatment means
+tr_mean_age <- mean(tr$age)
+tr_mean_gender <- mean(tr$gender)
+tr_mean_medicaid <- mean(tr$medicaid_eligible)
+tr_mean_income <- mean(tr$hh_income)
+
+# Filtering control group
+ctr <- case_data_cleaned %>% 
+  filter(treatment == 0)
+
+# Control means
+ctr_mean_age <- mean(ctr$age)
+ctr_mean_gender <- mean(ctr$gender)
+ctr_mean_medicaid <- mean(ctr$medicaid_eligible)
+ctr_mean_income <- mean(ctr$hh_income)
+
+# Storing population means
+p_mean_age <- 59.64
+p_mean_gender <- 0.4903
+p_mean_medicaid <- 0.5186
+p_mean_income <- 32149.88
+
+# Storing population standard deviations
+p_sd_age <- 14.98
+p_sd_gender <- 0.4999
+p_sd_medicaid <- 0.4997
+p_sd_income <- 20940.90
+```
+
+### Comparison of Treatment and Control Means
+
+Below I conduct the balance check between treatment and control for all demographic variables available.
+
+```{r}
+# Calculating treatment vs control mean differences 
+tvc_d_age <- tr_mean_age - ctr_mean_age
+tvc_d_gender <- tr_mean_gender - ctr_mean_gender
+tvc_d_medicaid <- tr_mean_medicaid - ctr_mean_medicaid
+tvc_d_income <- tr_mean_income - ctr_mean_income
+
+# Significance testing for treatment and control groups
+tvc_p_age <- z.test(x = tr$age, sigma.x = 14.98, y = ctr$age, sigma.y = 14.98, mu = 0, alternative = "two.sided")
+tvc_p_gender <- z.test(x = tr$gender, sigma.x = .4903, y = ctr$gender, sigma.y = .4903, mu = 0, alternative = "two.sided")
+tvc_p_medicaid <- z.test(x = tr$medicaid_eligible, sigma.x = .5186, y = ctr$medicaid_eligible, sigma.y = .5186, mu = 0, alternative = "two.sided")
+tvc_p_income <- z.test(x = tr$hh_income, sigma.x = 32149.88, y = ctr$hh_income, sigma.y = 32149.88, mu = 0, alternative = "two.sided")
+
+# Presenting results
+print("AGE")
+print(paste("The mean treatment age is", tr_mean_age))
+print(paste("The mean control age is", ctr_mean_age))
+print(paste("The mean difference in age between treatment and control is", tvc_d_age))
+print(paste("The p-value of this difference is", tvc_p_age$p.value))
+print("GENDER")
+print(paste("The propotion of females in the treatment is", tr_mean_gender))
+print(paste("The propotion of females in the control is", ctr_mean_gender))
+print(paste("The mean difference in female proportion between treatment and control is", tvc_d_gender))
+print(paste("The p-value of this difference is", tvc_p_gender$p.value))
+print("MEDICAID")
+print(paste("The propotion of medicaid-eligible patients in the treatment is", tr_mean_medicaid))
+print(paste("The propotion of medicaid-eligible patients in the control is", ctr_mean_medicaid))
+print(paste("The mean difference in medicaid-eligible-patient proportion between treatment and control is", tvc_d_medicaid))
+print(paste("The p-value of this difference is", tvc_p_medicaid$p.value))
+print("INCOME")
+print(paste("The mean treatment income is", tr_mean_income))
+print(paste("The mean control income is", ctr_mean_income))
+print(paste("The mean difference in income between treatment and control is", tvc_d_income))
+print(paste("The p-value of this difference is", tvc_p_income$p.value))
+
+```
+
+Note, in checking balance, we want to make sure the p-values **are not** significant, meaning we fail to reject the null hypothesis of no difference between groups: this indicates that the groups are statistically similar. We can see above that certain variables are balanced in their means across treatment and control.
+
+*Age*: Both the treatment and control are on average 60 years old, with a small difference in means of 0.8 years. This difference is not statistically significant (p = 0.59).
+
+*Gender*: Both conditions also seem to be balanced in gender, with about 51% of the treatment being female and 52% of the control being the same. The difference, of a little uner 1%, is not statistically significant (p = 0.84).
+
+However, some of the variables seem to be unbalanced between groups.
+
+*Medicaid Eligibility*: About 57% of the treatment group seems to be eligible for Medicaid, while only 40% of the control is. This difference of about 17% is statistically significant at an alpha level of 0.05 (p = 0.0007).
+
+*Household Income*: While the mean household income in the treatment is \$34315, the control group has a higher average income of \$55357. This is a difference of \$21,041, and is statistically significant (p \> 0.001).
+
+As a robustness check, I conduct t-tests and additionally calculate KS Bootstrapped values to determine if the distribution shapes of both groups are or are not similar. Note, means of conditions can be similar while their underlying distributions may differ, which matters for comparability.
+
+```{r}
+# creating vector with relevant covariates to check balance
+X <- cbind(case_data_cleaned$age, case_data_cleaned$gender, case_data_cleaned$medicaid_eligible, case_data_cleaned$hh_income)
+
+# assigning treatment variable
+Tr <- case_data_cleaned$treatment
+
+# checking initial balance
+mb0 <- MatchBalance(Tr ~ X, data = case_data_cleaned)
+```
+
+We see a similar story above, where age and gender are balanced and not statistically significantly different according to t-tests, but Medicaid eligibility and income significantly differing. The added value of using the Matching package is that it also provides measures of distributional similarity. Age distributions do not seem to be significantly different (KS Bootstrap p-value = 0.31), but income ones are (KS Bootstrap p-value \> 0.001).
+
+### Comparison of Treatment and the Entire Hospital.
+
+While we could check the distribution similarity between treatment and control groups with the KS test, we cannot do so for comparisons with the entire hospital because we were only given aggregate means and standard deviations. However, we can still check the difference in means and their statistical significance while noting that underlying differences in distribution shapes can also limit causal inference.
+
+Below I compute the difference between the demographic means and their statistical significance between the treatment group and the entire hospital.
+
+```{r}
+# Calculating treatment vs population mean differences
+tvp_d_age <- tr_mean_age - p_mean_age
+tvp_d_gender <- tr_mean_gender - p_mean_gender
+tvp_d_medicaid <- tr_mean_medicaid - p_mean_medicaid
+tvp_d_income <- tr_mean_income - p_mean_income
+?pnorm
+# Calculating z-scores
+tvp_z_age = tvp_d_age / p_sd_age
+tvp_z_gender = tvp_d_gender / p_sd_gender
+tvp_z_medicaid = tvp_d_medicaid / p_sd_medicaid
+tvp_z_income = tvp_d_income / p_sd_income
+
+# Significance testing
+tvp_p_age <- 2*pnorm(q = tvp_z_age, lower.tail=FALSE)
+tvp_p_gender <-2*pnorm(q = tvp_z_gender, lower.tail=FALSE)
+tvp_p_medicaid <-2*pnorm(q = tvp_z_medicaid, lower.tail=FALSE)
+tvp_p_income <- 2*pnorm(q = tvp_z_income, lower.tail=FALSE)
+
+# Presenting results
+print("AGE")
+print(paste("The mean treatment age is", tr_mean_age))
+print(paste("The mean population age is", p_mean_age))
+print(paste("The mean difference in age between treatment and population is", tvp_d_age))
+print(paste("The p-value of this difference is", tvp_p_age))
+print("GENDER")
+print(paste("The propotion of females in the treatment is", tr_mean_gender))
+print(paste("The propotion of females in the population is", p_mean_gender))
+print(paste("The mean difference in female proportion between treatment and control is", tvp_d_gender))
+print(paste("The p-value of this difference is", tvp_p_gender))
+print("MEDICAID")
+print(paste("The propotion of medicaid-eligible patients in the treatment is", tr_mean_medicaid))
+print(paste("The propotion of medicaid-eligible patients in the population is", p_mean_medicaid))
+print(paste("The mean difference in medicaid-eligible-patient proportion between treatment and population is", tvp_d_medicaid))
+print(paste("The p-value of this difference is", tvp_p_medicaid))
+print("INCOME")
+print(paste("The mean treatment income is", tr_mean_income))
+print(paste("The mean population income is", p_mean_income))
+print(paste("The mean difference in income between treatment and population is", tvp_d_income))
+print(paste("The p-value of this difference is", tvp_p_income))
+
+```
+
+*Age*: The treatment group and hospital have near identitcal average ages (59.6 years), with a negligible difference of 0.003. The difference is not statistically significant (p = 0.99).
+
+*Gender*: The treatment group is about 51% female, and the hospital population has a similar gender balance with about 49% females. The 2% difference between groups is not statistically significant (p = 0.97).
+
+*Medicaid Eligibility*: About 57% of the treatment group is eligible for Medicaid, while 52% of the hopsital population is. The small difference of 5% in eligible patients is not statistically significant (p = 0.91).
+
+*Household Income*: The average annual household income of the treatment group is around \$34315, which is similar to the hospital population's \$32150. The difference of only \$2165 between groups is not statistically significant (p = 0.92).
+
+It seems then that across demographics, the treatment group is quite similar to the hospital population, with minor average differences all statistically insignificant, and therefore failing to reject the null hypothesis of no difference between groups.
+
+### Comparison of Control and the Entire Hospital.
+
+Below I compute the difference between the demographic means and their statistical significance between the control group and the entire hospital.
+
+```{r}
+# Calculating control vs population mean differences
+cvp_d_age <- ctr_mean_age - p_mean_age
+cvp_d_gender <- ctr_mean_gender - p_mean_gender
+cvp_d_medicaid <- ctr_mean_medicaid - p_mean_medicaid
+cvp_d_income <- ctr_mean_income - p_mean_income
+
+# Calculating z-scores
+cvp_z_age = tvp_d_age / p_sd_age
+cvp_z_gender = tvp_d_gender / p_sd_gender
+cvp_z_medicaid = tvp_d_medicaid / p_sd_medicaid
+cvp_z_income = tvp_d_income / p_sd_income
+
+# Significance testing
+cvp_p_age <- 2*pnorm(q = cvp_z_age, lower.tail=FALSE)
+cvp_p_gender <- 2*pnorm(q = cvp_z_gender, lower.tail=FALSE)
+cvp_p_medicaid <- 2*pnorm(q = cvp_z_medicaid, lower.tail=FALSE)
+cvp_p_income <- 2*pnorm(q = cvp_z_income, lower.tail=FALSE)
+
+print("AGE")
+print(paste("The mean treatment age is", ctr_mean_age))
+print(paste("The mean population age is", p_mean_age))
+print(paste("The mean difference in age between treatment and population is", cvp_d_age))
+print(paste("The p-value of this difference is", cvp_p_age))
+print("GENDER")
+print(paste("The propotion of females in the treatment is", ctr_mean_gender))
+print(paste("The propotion of females in the population is", p_mean_gender))
+print(paste("The mean difference in female proportion between treatment and control is", cvp_d_gender))
+print(paste("The p-value of this difference is", cvp_p_gender))
+print("MEDICAID")
+print(paste("The propotion of medicaid-eligible patients in the treatment is", ctr_mean_medicaid))
+print(paste("The propotion of medicaid-eligible patients in the population is", p_mean_medicaid))
+print(paste("The mean difference in medicaid-eligible-patient proportion between treatment and population is", cvp_d_medicaid))
+print(paste("The p-value of this difference is", cvp_p_medicaid))
+print("INCOME")
+print(paste("The mean treatment income is", ctr_mean_income))
+print(paste("The mean population income is", p_mean_income))
+print(paste("The mean difference in income between treatment and population is", cvp_d_income))
+print(paste("The p-value of this difference is", cvp_p_income))
+
+```
+
+*Age*: The mean age of the control group is 60.45 years, and the hospital population is similar on average (59.64 years. The difference of 0.8 years is not statistically significant (p = 0.96).
+
+*Gender*: The control group has about an equal gender split, with 52% of the group being female. The hospital population seems to be the same, with 49% females. The difference between them (of 3%) is not statistically significant (p = 0.96).
+
+*Medicaid Eligibility*: About 40% of the control group is eligible for Medicaid, while 52% of the hospital population is. The 12% difference in eligible patients, however, is not statistically significant (p = 0.81).
+
+*Household Income*: While the hospital population has an average household income of \$32150, the control group's income seems to be higher with an average of \$55357. The difference is about \$23207, but it doesn't seem to be statistically significant at an alpha level of 0.05 (p = 0.27). It's important to note, however, this p-value is much smaller than the others, likely due to the larger difference in the groups.
+
+Overall, it seems that the control group and hospital population don't differ in statistically significant ways on most variables, although their income seems to be a bit more different than ideal.
+
+
+### Genetic Matching
+
+I went ahead and tried to determine if we could make the treatment and control variables more comparable to each other with the data already collected. Below I implement a genetic matching algorithm, which works on the basis of an optimization genetic algorithm to determine how to best match observations between both groups so as to reduce imbalance among them. This allows for better isolation of the causal treatment effect, especially given both groups seem comparable to the hospital population individually. 
+
+```{r}
+X_names <- data.frame(case_data_cleaned$age, case_data_cleaned$gender, case_data_cleaned$medicaid_eligible, case_data_cleaned$hh_income)
+names(X_names)[1] <- "age"
+names(X_names)[2] <- "gender"
+names(X_names)[3] <- "medicaid"
+names(X_names)[4] <- "income"
+
+# plotting distributional balance of age covariate between treatment and control
+bal.plot(x = X_names, var.name = "age", treat = Tr) + labs(title = "Figure 1. Distributional Balance of Age Between Treatment and Control Groups Before Matching")
+
+# plotting distributional balance of income covariate between treatment and control
+bal.plot(x = X_names, var.name = "income", treat = Tr) + labs(title = "Figure 2. Distributional Balance of Income Between Treatment and Control Groups Before Matching")
+
+# running genetic matching optimization algorithm to get optimal covariate weights
+genout1 <- GenMatch(Tr = Tr, X = X, M = 1, estimand = "ATT")
+
+# matching using optimal covariate weights
+mout1 <- Match(Tr = Tr, X = X, Weight.matrix = genout1, estimand = "ATT")
+
+# plotting distributional balance of age covariate between treatment and control
+bal.plot(x = mout1, var.name = "age", treat = Tr, formula = Tr~ X_names, data = case_data_cleaned) + labs(title = "Figure 3. Distributional Balance of Age Between Treatment and Control Groups After Genetic Matching")
+
+# plotting distributional balance of income covariate between treatment and control
+bal.plot(x = mout1, var.name = "income", treat = Tr, formula = Tr~ X_names, data = case_data_cleaned) + labs(title = "Figure 4. Distributional Balance of Income Between Treatment and Control Groups After Genetic  Matching")
+
+# checking improved balance after genetic matching
+mb1 <- MatchBalance(Tr ~ X, data = case_data_cleaned, match.out = mout1, nboots = 500)
+```
+
+We can see above that matching greatly improved the comparability among groups on all covariates. Figures 1 and 2 show the distributional (dis)similarity before the matching process for both continuous variables, note that the distribution for age may have a similar mean, but their distributional shape is quite different (highlighting the limitations of only focusing on mean-based hypothesis testing). After the matching procedure, we can see from Figures 3 and 4 that balance is much better among these two variables. The model output shows us that before matching, the lowest p-value is for age, but this is still high (p = 0.82) and is more than sufficient to fail rejecting the null hypothesis of no difference. 
+
