@@ -108,7 +108,7 @@ Note, in checking balance, we want to make sure the p-values **are not** signifi
 
 *Age*: Both the treatment and control are on average 60 years old, with a small difference in means of 0.8 years. This difference is not statistically significant (p = 0.59).
 
-*Gender*: Both conditions also seem to be balanced in gender, with about 51% of the treatment being female and 52% of the control being the same. The difference, of a little uner 1%, is not statistically significant (p = 0.84).
+*Gender*: Both conditions also seem to be balanced in gender, with about 51% of the treatment being female and 52% of the control being the same. The difference, of a little under 1%, is not statistically significant (p = 0.84).
 
 However, some of the variables seem to be unbalanced between groups.
 
