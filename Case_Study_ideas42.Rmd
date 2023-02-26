@@ -180,11 +180,11 @@ print(paste("The p-value of this difference is", tvp_p_income))
 
 ```
 
-*Age*: The treatment group and hospital have near identitcal average ages (59.6 years), with a negligible difference of 0.003. The difference is not statistically significant (p = 0.99).
+*Age*: The treatment group and hospital have near identical average ages (59.6 years), with a negligible difference of 0.003. The difference is not statistically significant (p = 0.99).
 
 *Gender*: The treatment group is about 51% female, and the hospital population has a similar gender balance with about 49% females. The 2% difference between groups is not statistically significant (p = 0.97).
 
-*Medicaid Eligibility*: About 57% of the treatment group is eligible for Medicaid, while 52% of the hopsital population is. The small difference of 5% in eligible patients is not statistically significant (p = 0.91).
+*Medicaid Eligibility*: About 57% of the treatment group is eligible for Medicaid, while 52% of the hospital population is. The small difference of 5% in eligible patients is not statistically significant (p = 0.91).
 
 *Household Income*: The average annual household income of the treatment group is around \$34315, which is similar to the hospital population's \$32150. The difference of only \$2165 between groups is not statistically significant (p = 0.92).
 
